@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alexa Inclusiva</title>
 
-    <!-- Importa Tailwind e MediaPipe Hands -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
 
     <style>
         /* ---------- Estilo geral ---------- */
@@ -196,21 +197,18 @@
 
 <body class="bg-gray-900">
 
-    <!----------- Interface do chat ------------>
     <div id="chat-ui" class="chat-container">
         <div class="chat-header">
             <img src="https://placehold.co/64x64/2d3748/fff?text=AI" alt="Ícone da Alexa" class="w-12 h-12">
             <h1 class="text-2xl font-semibold text-gray-200">Alexa Inclusiva</h1>
         </div>
 
-        <!-- Mensagens do chat -->
         <div id="messages" class="chat-messages">
             <div class="message-bubble bot-message">
                 Olá, eu sou a Alexa inclusiva
             </div>
         </div>
 
-        <!-- Campo de entrada e botões -->
         <div class="chat-input">
             <form id="chat-form" style="display: none;">
                 <input type="text" id="user-input" placeholder="Digite sua mensagem..." autocomplete="off" class="focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-opacity-50">
@@ -220,7 +218,6 @@
         </div>
     </div>
 
-    <!------------ Interface de captura de gestos (MediaPipe) ------------>
     <div id="mediapipe-ui" class="mediapipe-container">
         <h2 class="text-3xl font-bold mb-4">Captador de Gestos</h2>
         <div class="mediapipe-content">
@@ -455,7 +452,7 @@
             const b = { x: p3.x - p2.x, y: p3.y - p2.y };
             const produto = a.x * b.x + a.y * b.y;
             const magA = Math.sqrt(a.x * a.x + a.y * a.y);
-            const magB = Math.sqrt(b.x * b.x + b.y * b.y);
+            const magB = Math.sqrt(b.x * b.x + b.y * a.y);
             if (magA * magB === 0) return 0;
             let cos_ang = produto / (magA * magB);
             cos_ang = Math.min(1.0, Math.max(-1.0, cos_ang));
@@ -467,12 +464,12 @@
         const ang_anelar = angulo_entre(pontos[13], pontos[14], pontos[16]);
         const ang_mindinho = angulo_entre(pontos[17], pontos[18], pontos[20]);
         const ang_estendido = 160; 
-        const ang_dobrado = 90;    
+        const ang_dobrado = 90;     
         const polegar_estendido = 160;  
         const polegar_fechado = 120;
         if (ang_polegar > polegar_estendido && ang_indicador > ang_estendido && ang_medio < ang_dobrado && ang_anelar < ang_dobrado && ang_mindinho < ang_dobrado) return "Ligar";
         if (ang_polegar < polegar_fechado && ang_indicador > ang_estendido && ang_medio < ang_dobrado && ang_anelar < ang_dobrado && ang_mindinho < ang_dobrado) return "Desligar";
-        if (ang_polegar > polegar_estendido && ang_indicador > ang_estendido && ang_medio > ang_estendido && ang_anelar > ang_estendido && ang_mindinho > ang_estendido) return "Parar";
+        if (ang_polegar > polear_estendido && ang_indicador > ang_estendido && ang_medio > ang_estendido && ang_anelar > ang_estendido && ang_mindinho > ang_estendido) return "Parar";
         return null;
     }
 
@@ -481,3 +478,4 @@
         mensagem_status.textContent = mensagem;
     }
 </script>
+</html>
