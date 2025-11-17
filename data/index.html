@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alexa Inclusiva</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+
+    <style>
+        /* ---------- Estilo geral ---------- */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0c0c0c;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* ---------- Container principal do chat ---------- */
+        .chat-container {
+            background-color: #1a1a1a;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 600px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+        }
+
+        /* ---------- Cabeçalho do chat ---------- */
+        .chat-header {
+            background-color: #262626;
+            padding: 1rem;
+            border-top-left-radius: 1.5rem;
+            border-top-right-radius: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .chat-header img {
+            border-radius: 50%;
+            border: 2px solid #5a5a5a;
+        }
+
+        /* ---------- Área das mensagens ---------- */
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* ---------- Bolhas de mensagens ---------- */
+        .message-bubble {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1.25rem;
+            line-height: 1.4;
+        }
+        .bot-message {
+            background-color: #2d3748;
+            align-self: flex-start;
+        }
+        .user-message {
+            background-color: #4c51bf;
+            align-self: flex-end;
+            color: #fff;
+        }
+
+        /* ---------- Campo de entrada e botões ---------- */
+        .chat-input {
+            padding: 1rem;
+            background-color: #262626;
+            border-bottom-left-radius: 1.5rem;
+            border-bottom-right-radius: 1.5rem;
+        }
+        .chat-input form {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .chat-input input {
+            flex-grow: 1;
+            background-color: #3b3b3b;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 1.25rem;
+            color: #e0e0e0;
+        }
+        .chat-input button {
+            background-color: #4c51bf;
+            color: #fff;
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 1.25rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .chat-input button:hover {
+            background-color: #5a60c9;
+        }
+
+        /* ---------- Botões de simulação ---------- */
+        .sim-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .sim-buttons button {
+            background-color: #4c51bf;
+            color: #fff;
+            padding: 0.75rem 1rem;
+            border-radius: 1.25rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        /* ---------- Área do MediaPipe (captura de gestos) ---------- */
+        .mediapipe-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0c0c0c;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .mediapipe-container.active {
+            display: flex;
+        }
+
+        /* ---------- Vídeo e Canvas ---------- */
+        .mediapipe-content {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+        }
+        .mediapipe-content video, .mediapipe-content canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 1rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transform: scaleX(-1);
+        }
+        .mediapipe-content canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* ---------- Mensagem de status (ex: "Aguardando gesto...") ---------- */
+        .status-message {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px;
+            color: white;
+            font-size: 1.125rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .status-message.visible {
+            opacity: 1;
+        }
+
+        /* ---------- Ajustes para telas menores ---------- */
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 95vh;
+                margin: 0.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900">
+
+    <div id="chat-ui" class="chat-container">
+        <div class="chat-header">
+            <img src="https://placehold.co/64x64/2d3748/fff?text=AI" alt="Ícone da Alexa" class="w-12 h-12">
+            <h1 class="text-2xl font-semibold text-gray-200">Alexa Inclusiva</h1>
+        </div>
+
+        <div id="messages" class="chat-messages">
+            <div class="message-bubble bot-message">
+                Olá, eu sou a Alexa inclusiva
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <form id="chat-form" style="display: none;">
+                <input type="text" id="user-input" placeholder="Digite sua mensagem..." autocomplete="off" class="focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-opacity-50">
+                <button type="submit" class="rounded-full">Enviar</button>
+            </form>
+            <div id="button-container" class="sim-buttons"></div>
+        </div>
+    </div>
+
+    <div id="mediapipe-ui" class="mediapipe-container">
+        <h2 class="text-3xl font-bold mb-4">Captador de Gestos</h2>
+        <div class="mediapipe-content">
+            <video id="video-feed" class="w-full h-auto" autoplay playsinline></video>
+            <canvas id="gesture-canvas" class="w-full h-auto"></canvas>
+            <div id="status-message" class="status-message">Aguardando gesto...</div>
+        </div>
+    </div>
+
+<script>
+
+    // ---------- variáveis principais da interface -----------
+    const ui_chat = document.getElementById('chat-ui');
+    const ui_mediapipe = document.getElementById('mediapipe-ui');
+    const formulario_chat = document.getElementById('chat-form');
+    const entrada_usuario = document.getElementById('user-input');
+    const container_mensagens = document.getElementById('messages');
+    const container_botoes = document.getElementById('button-container'); 
+    const elemento_video = document.getElementById('video-feed');
+    const elemento_canvas = document.getElementById('gesture-canvas');
+    const contexto_canvas = elemento_canvas.getContext('2d');
+    const mensagem_status = document.getElementById('status-message');
+    
+    let modo_atual = null;
+    let conexao_websocket;
+    let fluxo_camera;
+    let ultimo_gesto_enviado = null; 
+
+    // ---------- função iniciar_interface -----------
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            adicionar_mensagem("Gostaria de iniciar alguma simulação?", 'bot');
+            mostrar_botoes_iniciais();
+        }, 500); 
+    });
+
+    // ---------- função retornar_para_chat -----------
+    function retornar_para_chat() {
+        ultimo_gesto_enviado = null; 
+        if (fluxo_camera) {
+            fluxo_camera.getTracks().forEach(track => track.stop());
+            fluxo_camera = null;
+        }
+        elemento_video.srcObject = null;
+        ui_mediapipe.classList.remove('active');
+        ui_mediapipe.style.display = 'none';
+        ui_chat.style.display = 'flex';
+        const area_input = document.querySelector('.chat-input');
+        if (area_input) area_input.style.display = 'block'; 
+        mostrar_botoes_iniciais(); 
+        setTimeout(() => {
+            ui_chat.style.transform = 'scale(1)';
+            ui_chat.style.opacity = '1';
+        }, 50);
+        adicionar_mensagem('Captador de gestos fechado.', 'bot');
+        adicionar_mensagem("Gostaria de iniciar alguma simulação?", 'bot');
+    }
+
+    // ---------- tecla de atalho para retornar -----------
+    document.addEventListener('keydown', (evento) => {
+        if (evento.key === 'Escape' && ui_mediapipe.style.display === 'flex') {
+            retornar_para_chat();
+        }
+    });
+
+    // ---------- função adicionar_mensagem -----------
+    function adicionar_mensagem(texto, remetente) {
+        const div_mensagem = document.createElement('div');
+        div_mensagem.classList.add('message-bubble');
+        div_mensagem.textContent = texto;
+        if (remetente === 'user') div_mensagem.classList.add('user-message');
+        else div_mensagem.classList.add('bot-message');
+        container_mensagens.appendChild(div_mensagem);
+        container_mensagens.scrollTop = container_mensagens.scrollHeight;
+    }
+
+    // ---------- função limpar_botoes -----------
+    function limpar_botoes() {
+        container_botoes.innerHTML = '';
+    }
+
+    // ---------- função mostrar_botoes_iniciais -----------
+    function mostrar_botoes_iniciais() {
+        limpar_botoes();
+        formulario_chat.style.display = 'none'; 
+        container_botoes.style.display = 'flex'; 
+        const opcoes = ["Sim", "Apenas abrir Captador de Gestos"];
+        opcoes.forEach(opcao => {
+            const botao = document.createElement('button');
+            botao.textContent = opcao;
+            botao.addEventListener('click', () => lidar_com_escolha_inicial(opcao));
+            container_botoes.appendChild(botao);
+        });
+    }
+
+    // ---------- função mostrar_botoes_simulacao -----------
+    function mostrar_botoes_simulacao() {
+        limpar_botoes();
+        const opcoes = ["Micro-ondas", "Campainha"];
+        opcoes.forEach(opcao => {
+            const botao = document.createElement('button');
+            botao.textContent = opcao;
+            botao.addEventListener('click', () => lidar_com_escolha_simulacao(opcao));
+            container_botoes.appendChild(botao);
+        });
+    }
+
+    // ---------- função lidar_com_escolha_inicial -----------
+    function lidar_com_escolha_inicial(escolha) {
+        adicionar_mensagem(escolha, 'user'); 
+        if (escolha === "Sim") {
+            adicionar_mensagem("Qual simulação gostaria de iniciar?", 'bot');
+            mostrar_botoes_simulacao(); 
+        } else if (escolha === "Apenas abrir Captador de Gestos") {
+            lidar_com_escolha_simulacao('Nenhuma'); 
+        }
+    }
+
+    // ---------- função lidar_com_escolha_simulacao -----------
+    function lidar_com_escolha_simulacao(escolha) {
+        const escolha_minuscula = escolha.toLowerCase();
+        let mensagem_bot = '';
+        if (escolha !== 'Nenhuma') adicionar_mensagem(escolha, 'user');
+        if (escolha_minuscula === 'micro-ondas') { 
+            mensagem_bot = 'Iniciando a simulação do micro-ondas...';
+            modo_atual = 'microondas';
+        } else if (escolha_minuscula === 'campainha') {
+            mensagem_bot = 'Iniciando a simulação da campainha...';
+            modo_atual = 'campainha';
+        } else { 
+            mensagem_bot = 'Ok. Iniciando o captador de gestos sem simulação.';
+            modo_atual = null;
+        }
+        adicionar_mensagem(mensagem_bot, 'bot');
+        const area_input = document.querySelector('.chat-input');
+        if (area_input) area_input.style.display = 'none'; 
+        iniciar_reconhecimento_gesto();
+    }
+
+    // ---------- configuração do MediaPipe -----------
+    const maos = new Hands({
+        locateFile: (arquivo) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${arquivo}`
+    });
+
+    maos.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
+    });
+    
+    // ---------- função ao_receber_resultados -----------
+    function ao_receber_resultados(resultados) {
+        contexto_canvas.clearRect(0, 0, elemento_canvas.width, elemento_canvas.height);
+        contexto_canvas.save();
+        contexto_canvas.drawImage(resultados.image, 0, 0, elemento_canvas.width, elemento_canvas.height);
+        if (resultados.multiHandLandmarks && resultados.multiHandLandmarks.length > 0) {
+            for (const pontos of resultados.multiHandLandmarks) {
+                drawConnectors(contexto_canvas, pontos, HAND_CONNECTIONS, {color: '#FFFFFF', lineWidth: 5});
+                drawLandmarks(contexto_canvas, pontos, {color: '#4c51bf', lineWidth: 2});
+            }
+            const pontos_mao = resultados.multiHandLandmarks[0].map(p => ({ x: p.x, y: p.y, z: p.z }));
+            const gesto = detectar_gesto(pontos_mao); 
+            if (gesto) {
+                exibir_mensagem_status(`Gesto: ${gesto}`);
+                if (gesto !== ultimo_gesto_enviado) {
+                    const comando = gesto.toLowerCase();
+                    if (conexao_websocket && conexao_websocket.readyState === WebSocket.OPEN) conexao_websocket.send(comando); 
+                    ultimo_gesto_enviado = gesto; 
+                }
+            } else {
+                exibir_mensagem_status('Aguardando gesto...');
+                ultimo_gesto_enviado = null; 
+            }
+        } else {
+            exibir_mensagem_status('Mão não detectada...');
+            ultimo_gesto_enviado = null; 
+        }
+        contexto_canvas.restore();
+    }
+    maos.onResults(ao_receber_resultados);
+
+    // ---------- função iniciar_reconhecimento_gesto -----------
+    async function iniciar_reconhecimento_gesto() {
+        ui_chat.style.transform = 'scale(0.8) translateY(-100px)';
+        ui_chat.style.opacity = '0';
+        setTimeout(() => {
+            ui_chat.style.display = 'none';
+            ui_mediapipe.style.display = 'flex';
+            setTimeout(() => ui_mediapipe.classList.add('active'), 100);
+        }, 500);
+        const url_ws = `ws://${window.location.hostname}/ws`;
+        conexao_websocket = new WebSocket(url_ws);
+        conexao_websocket.onopen = () => {
+            exibir_mensagem_status('Conectado ao ESP32.');
+            if (modo_atual === 'microondas') conexao_websocket.send('microondas_on');
+            else if (modo_atual === 'campainha') conexao_websocket.send('campainha_on');
+        };
+        conexao_websocket.onmessage = (evento) => {
+            const mensagem = evento.data;
+            if (mensagem === 'microondas_beeping') exibir_mensagem_status('Micro-ondas apitando');
+            else if (mensagem === 'campainha_ringing') exibir_mensagem_status('Campainha tocando');
+        };
+        conexao_websocket.onclose = () => exibir_mensagem_status('Conexão com ESP32 perdida.');
+        conexao_websocket.onerror = () => exibir_mensagem_status('Erro na conexão com ESP32.');
+        try {
+            fluxo_camera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            elemento_video.srcObject = fluxo_camera;
+            const camera = new Camera(elemento_video, {
+                onFrame: async () => await maos.send({ image: elemento_video }),
+                width: 640,
+                height: 480
+            });
+            camera.start();
+            elemento_video.onloadeddata = () => {
+                elemento_canvas.width = elemento_video.videoWidth;
+                elemento_canvas.height = elemento_video.videoHeight;
+            };
+        } catch (erro) {
+            const div_erro = document.createElement('div');
+            div_erro.innerHTML = `<strong>Erro ao acessar a câmera.</strong><br><br>1. Verifique se você permitiu o acesso à câmera.<br>2. Navegadores podem bloquear a câmera em conexões não seguras.`;
+            div_erro.classList.add('message-bubble', 'bot-message', 'p-4', 'leading-relaxed');
+            ui_mediapipe.querySelector('.mediapipe-content').innerHTML = '';
+            ui_mediapipe.querySelector('.mediapipe-content').appendChild(div_erro);
+        }
+    }
+
+    // ---------- função detectar_gesto -----------
+    function detectar_gesto(pontos) {
+        function angulo_entre(p1, p2, p3) {
+            const a = { x: p1.x - p2.x, y: p1.y - p2.y };
+            const b = { x: p3.x - p2.x, y: p3.y - p2.y };
+            const produto = a.x * b.x + a.y * b.y;
+            const magA = Math.sqrt(a.x * a.x + a.y * a.y);
+            const magB = Math.sqrt(b.x * b.x + b.y * a.y);
+            if (magA * magB === 0) return 0;
+            let cos_ang = produto / (magA * magB);
+            cos_ang = Math.min(1.0, Math.max(-1.0, cos_ang));
+            return Math.acos(cos_ang) * 180 / Math.PI;
+        }
+        const ang_polegar = angulo_entre(pontos[2], pontos[3], pontos[4]);
+        const ang_indicador = angulo_entre(pontos[5], pontos[6], pontos[8]);
+        const ang_medio = angulo_entre(pontos[9], pontos[10], pontos[12]);
+        const ang_anelar = angulo_entre(pontos[13], pontos[14], pontos[16]);
+        const ang_mindinho = angulo_entre(pontos[17], pontos[18], pontos[20]);
+        const ang_estendido = 160; 
+        const ang_dobrado = 90;     
+        const polegar_estendido = 160;  
+        const polegar_fechado = 120;
+        if (ang_polegar > polegar_estendido && ang_indicador > ang_estendido && ang_medio < ang_dobrado && ang_anelar < ang_dobrado && ang_mindinho < ang_dobrado) return "Ligar";
+        if (ang_polegar < polegar_fechado && ang_indicador > ang_estendido && ang_medio < ang_dobrado && ang_anelar < ang_dobrado && ang_mindinho < ang_dobrado) return "Desligar";
+        if (ang_polegar > polear_estendido && ang_indicador > ang_estendido && ang_medio > ang_estendido && ang_anelar > ang_estendido && ang_mindinho > ang_estendido) return "Parar";
+        return null;
+    }
+
+    // ---------- função exibir_mensagem_status -----------
+    function exibir_mensagem_status(mensagem) {
+        mensagem_status.textContent = mensagem;
+    }
+</script>
+</html>
